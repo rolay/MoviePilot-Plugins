@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-MoviePilot v2 插件 - Railgun 自动签到
-功能：定时随机延时签到 Railgun 网站，支持远程命令触发及机器人通知。
+MoviePilot v2 插件 - GLaDOS 系列站点自动签到
+功能：定时随机延时签到 GLaDOS 系列站点（railgun.info / glados-facility.com 等），
+支持自定义站点域名、远程命令触发及机器人通知。可通过 MoviePilot 插件分身功能同时管理多个账号。
 """
 
 import random
@@ -67,14 +68,14 @@ UA_ENVIRONMENTS = [
 
 class RailgunCheckin(_PluginBase):
     """
-    Railgun 自动签到插件
+    GLaDOS 系列站点自动签到插件（支持 railgun.info / glados-facility.com 等）
     """
 
     # ─── 插件元数据（类属性，MoviePilot 读取这些属性来显示名称、描述等） ───
-    plugin_name = "Railgun 自动签到"
-    plugin_desc = "定时随机延时执行 Railgun 网站签到，支持远程命令触发及机器人通知。"
+    plugin_name = "GLaDOS 自动签到"
+    plugin_desc = "定时随机延时签到 GLaDOS 系列站点，支持自定义域名、远程命令及机器人通知。"
     plugin_icon = "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png"
-    plugin_version = "1.2.0"
+    plugin_version = "1.3.0"
     plugin_author = "rolay"
     author_url = "https://github.com/rolay"
     plugin_config_prefix = "railguncheckin_"
@@ -86,8 +87,9 @@ class RailgunCheckin(_PluginBase):
     _notify: bool = True
     _onlyonce: bool = False
     _cron: str = ""
+    _site_domain: str = "railgun.info"
     _cookie: str = ""
-    _token: str = "railgun.info"
+    _token: str = ""
     _enable_random_delay: bool = True
     _min_delay_seconds: int = 0
     _max_delay_seconds: int = 1800
@@ -107,8 +109,9 @@ class RailgunCheckin(_PluginBase):
             self._notify = config.get("notify", True)
             self._onlyonce = config.get("onlyonce", False)
             self._cron = config.get("cron", "")
+            self._site_domain = (config.get("site_domain", "") or "railgun.info").strip().lower()
             self._cookie = config.get("cookie", "")
-            self._token = config.get("token", "railgun.info")
+            self._token = config.get("token", "") or ""
             self._enable_random_delay = config.get("enable_random_delay", True)
             self._min_delay_seconds = int(config.get("min_delay_seconds", 0))
             self._max_delay_seconds = int(config.get("max_delay_seconds", 1800))
@@ -141,6 +144,7 @@ class RailgunCheckin(_PluginBase):
             "notify": self._notify,
             "onlyonce": self._onlyonce,
             "cron": self._cron,
+            "site_domain": self._site_domain,
             "cookie": self._cookie,
             "token": self._token,
             "enable_random_delay": self._enable_random_delay,
@@ -209,8 +213,12 @@ class RailgunCheckin(_PluginBase):
         核心签到任务入口。
         :param ignore_delay: 为 True 时跳过随机延时（远程手动触发时使用）。
         """
+        domain = self._site_domain or "railgun.info"
+        # Token 优先使用用户自定义值，否则默认取站点域名
+        token = self._token.strip() if self._token and self._token.strip() else domain
+
         if not self._cookie:
-            msg = "签到失败：未配置 Koa Session Cookie！请在插件设置中填写。"
+            msg = f"[{domain}] 签到失败：未配置 Koa Session Cookie！请在插件设置中填写。"
             logger.error(f"{self.plugin_name} - {msg}")
             self._send_notification("签到失败", msg)
             return
@@ -221,14 +229,16 @@ class RailgunCheckin(_PluginBase):
             max_d = max(min_d, self._max_delay_seconds)
             if max_d > min_d:
                 delay = random.randint(min_d, max_d)
-                logger.info(f"{self.plugin_name} - 随机延迟 {delay} 秒后发起签到...")
+                logger.info(f"{self.plugin_name} - [{domain}] 随机延迟 {delay} 秒后发起签到...")
                 time.sleep(delay)
 
-        # 2. 构造并发送签到请求
-        logger.info(f"{self.plugin_name} - 正在向 Railgun 服务器发送签到请求...")
-        url = "https://railgun.info/api/user/checkin"
+        # 2. 根据站点域名动态构造请求 URL 和 Origin
+        url = f"https://{domain}/api/user/checkin"
+        origin = f"https://{domain}"
+        logger.info(f"{self.plugin_name} - [{domain}] 正在发送签到请求...")
+
         env = random.choice(UA_ENVIRONMENTS)
-        logger.info(f"{self.plugin_name} - 随机伪装浏览器: {env['name']}")
+        logger.info(f"{self.plugin_name} - [{domain}] 随机伪装浏览器: {env['name']}")
 
         headers = {
             "accept": "application/json, text/plain, */*",
@@ -237,7 +247,7 @@ class RailgunCheckin(_PluginBase):
             "content-type": "application/json;charset=UTF-8",
             "cookie": self._cookie,
             "dnt": "1",
-            "origin": "https://railgun.info",
+            "origin": origin,
             "pragma": "no-cache",
             "priority": "u=1, i",
             "sec-fetch-dest": "empty",
@@ -252,7 +262,7 @@ class RailgunCheckin(_PluginBase):
             headers["sec-ch-ua-mobile"] = "?0"
             headers["sec-ch-ua-platform"] = env["sec-ch-ua-platform"]
 
-        post_data = {"token": self._token}
+        post_data = {"token": token}
 
         try:
             data_bytes = json.dumps(post_data).encode("utf-8")
@@ -270,7 +280,7 @@ class RailgunCheckin(_PluginBase):
 
                     if code == 1:
                         ok_msg = (
-                            f"签到成功!\n"
+                            f"[{domain}] 签到成功!\n"
                             f"接口消息: {message}\n"
                             f"伪装浏览器: {env['name']}"
                         )
@@ -278,7 +288,7 @@ class RailgunCheckin(_PluginBase):
                         self._send_notification("签到成功", ok_msg)
                     else:
                         warn_msg = (
-                            f"签到返回异常 (code={code})\n"
+                            f"[{domain}] 签到返回异常 (code={code})\n"
                             f"接口消息: {message}\n"
                             f"伪装浏览器: {env['name']}"
                         )
@@ -387,10 +397,24 @@ class RailgunCheckin(_PluginBase):
                             }
                         ]
                     },
-                    # ── 第二行：Cron 与 Token ──
+                    # ── 第二行：站点域名、Cron、Token ──
                     {
                         "component": "VRow",
                         "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [{
+                                    "component": "VTextField",
+                                    "props": {
+                                        "model": "site_domain",
+                                        "label": "站点域名",
+                                        "placeholder": "railgun.info",
+                                        "hint": "GLaDOS 系列站点域名，如 railgun.info 或 glados-facility.com",
+                                        "persistent-hint": True
+                                    }
+                                }]
+                            },
                             {
                                 "component": "VCol",
                                 "props": {"cols": 12, "md": 4},
@@ -410,14 +434,22 @@ class RailgunCheckin(_PluginBase):
                                     "component": "VTextField",
                                     "props": {
                                         "model": "token",
-                                        "label": "签到 Token",
-                                        "placeholder": "railgun.info"
+                                        "label": "签到 Token (可选)",
+                                        "placeholder": "留空则自动使用站点域名",
+                                        "hint": "一般无需填写，默认取站点域名作为 Token",
+                                        "persistent-hint": True
                                     }
                                 }]
-                            },
+                            }
+                        ]
+                    },
+                    # ── 第三行：延迟参数 ──
+                    {
+                        "component": "VRow",
+                        "content": [
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 2},
+                                "props": {"cols": 12, "md": 6},
                                 "content": [{
                                     "component": "VTextField",
                                     "props": {
@@ -430,7 +462,7 @@ class RailgunCheckin(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 2},
+                                "props": {"cols": 12, "md": 6},
                                 "content": [{
                                     "component": "VTextField",
                                     "props": {
@@ -443,7 +475,7 @@ class RailgunCheckin(_PluginBase):
                             }
                         ]
                     },
-                    # ── 第三行：Cookie（多行） ──
+                    # ── 第四行：Cookie（多行） ──
                     {
                         "component": "VRow",
                         "content": [
@@ -469,8 +501,9 @@ class RailgunCheckin(_PluginBase):
             "notify": True,
             "onlyonce": False,
             "cron": "0 8 * * *",
+            "site_domain": "railgun.info",
             "cookie": "",
-            "token": "railgun.info",
+            "token": "",
             "enable_random_delay": True,
             "min_delay_seconds": 0,
             "max_delay_seconds": 1800,
