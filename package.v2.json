@@ -1,16 +1,17 @@
 {
   "RailgunCheckin": {
     "name": "Railgun 自动签到",
-    "description": "定时随机延时执行 Railgun 网站签到，并发送机器人通知",
-    "version": "1.1.0",
-    "author": "Antigravity",
+    "description": "定时随机延时执行 Railgun 网站签到，支持远程命令触发及机器人通知。",
+    "version": "1.2.0",
+    "author": "rolay",
     "level": 1,
     "icon": "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png",
     "labels": "工具",
     "history": {
       "1.0.0": "初始化单体脚本",
-      "1.1.0": "适配v2远程指令及通知"
+      "1.1.0": "适配 MoviePilot v2 插件架构",
+      "1.2.0": "按官方规范重构，实现 get_form/get_service/get_command 等标准方法"
     },
     "system_version": ">=2.0.0"
   }
-}
+}
