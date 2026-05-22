@@ -2,7 +2,7 @@
   "RailgunCheckin": {
     "name": "GLaDOS 自动签到",
     "description": "定时随机延时签到 GLaDOS 系列站点，支持自定义域名、远程命令及机器人通知。",
-    "version": "1.3.0",
+    "version": "2.0.0",
     "author": "rolay",
     "level": 1,
     "icon": "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png",
@@ -11,7 +11,8 @@
       "1.0.0": "初始化单体脚本",
       "1.1.0": "适配 MoviePilot v2 插件架构",
       "1.2.0": "按官方规范重构，实现 get_form/get_service/get_command 等标准方法",
-      "1.3.0": "支持自定义站点域名，可通过插件分身管理多个 GLaDOS 系列账号"
+      "1.3.0": "支持自定义站点域名，可通过插件分身管理多个 GLaDOS 系列账号",
+      "2.0.0": "全面重构：网络重试/代理/超时、积分回查、重复签到识别、历史持久化、详情页、VCard 分区表单"
     },
     "system_version": ">=2.0.0"
   }
