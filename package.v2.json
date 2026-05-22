@@ -1,0 +1,16 @@
+{
+  "RailgunCheckin": {
+    "name": "Railgun 自动签到",
+    "description": "定时随机延时执行 Railgun 网站签到，并发送机器人通知",
+    "version": "1.1.0",
+    "author": "Antigravity",
+    "level": 1,
+    "icon": "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png",
+    "labels": "工具",
+    "history": {
+      "1.0.0": "初始化单体脚本",
+      "1.1.0": "适配v2远程指令及通知"
+    },
+    "system_version": ">=2.0.0"
+  }
+}
