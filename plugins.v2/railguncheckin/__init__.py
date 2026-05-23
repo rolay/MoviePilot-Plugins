@@ -79,7 +79,7 @@ class RailgunCheckin(_PluginBase):
     plugin_name = "GLaDOS 自动签到"
     plugin_desc = "定时随机延时签到 GLaDOS 系列站点，支持自定义域名、远程命令及机器人通知。"
     plugin_icon = "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png"
-    plugin_version = "2.1.0"
+    plugin_version = "2.2.1"
     plugin_author = "rolay"
     author_url = "https://github.com/rolay"
     plugin_config_prefix = "railguncheckin_"
@@ -520,40 +520,50 @@ class RailgunCheckin(_PluginBase):
             left_days = user_status.get("left_days")
             user_email = user_status.get("email")
 
-            # 5. 构造美化通知消息
+            # 5. 构造树形风格通知消息
             if checkin_status == "签到成功":
                 title_suffix = "签到成功 ✅"
+                status_icon = "✅ 签到成功"
             elif checkin_status == "已签到":
-                title_suffix = "今日已签到 ℹ️"
+                title_suffix = "今日已签到 🔄"
+                status_icon = "🔄 已签到"
             else:
                 title_suffix = "签到失败 ❌"
+                status_icon = "❌ 签到失败"
 
             # 积分行：本次获得 + 当前余额
             if points_gain > 0:
-                points_line = f"+{points_gain} 点"
+                points_line = f"+{points_gain}"
                 if current_points is not None:
-                    points_line += f"（余 {current_points} 点）"
+                    points_line += f" / {current_points}"
             elif current_points is not None:
-                points_line = f"{current_points} 点"
+                points_line = str(current_points)
             else:
                 points_line = "-"
 
             # 剩余时间行
-            if left_days is not None and left_days >= 0:
-                days_line = f"{left_days} 天"
-            else:
-                days_line = "-"
+            days_line = f"{left_days} 天" if (left_days is not None and left_days >= 0) else "-"
 
-            detail_lines = [
-                f"站点：{domain}",
-                f"状态：{checkin_status}",
-                f"积分：{points_line}",
-                f"剩余时间：{days_line}",
+            # 邮箱脱敏（保留前2位和@后域名，中间替换*）
+            def _mask_email(e: str) -> str:
+                try:
+                    local, domain_part = e.split("@", 1)
+                    masked = local[:2] + "*" * max(4, len(local) - 2)
+                    return f"{masked}@{domain_part}"
+                except Exception:
+                    return e
+
+            # 组装纯列表格式（emoji + 标签，无树形符号）
+            lines = [
+                f"🌐 站点：{domain}",
+                f"📝 状态：{status_icon}",
+                f"🥉 积分：{points_line}",
+                f"⏳ 剩余：{days_line}",
             ]
             if user_email:
-                detail_lines.append(f"邮箱：{user_email}")
+                lines.append(f"📧 邮箱：{_mask_email(user_email)}")
 
-            full_msg = "\n".join(detail_lines)
+            full_msg = "\n".join(lines)
 
             logger.info(f"{self.plugin_name} - [{domain}] {checkin_status} | 积分: {points_line} | 剩余: {days_line}")
             self._send_notification(title_suffix, full_msg)
@@ -568,18 +578,26 @@ class RailgunCheckin(_PluginBase):
             })
 
         except ConnectionError as e:
-            net_err = f"[{domain}] 网络连接失败 (已重试 {self._max_attempts} 次): {e}"
-            logger.error(f"{self.plugin_name} - {net_err}")
-            self._send_notification("签到失败", net_err)
+            err_msg = "\n".join([
+                f"🌐 站点：{domain}",
+                f"📝 状态：❌ 签到失败",
+                f"⚠️ 原因：网络连接失败 (已重试 {self._max_attempts} 次)",
+            ])
+            logger.error(f"{self.plugin_name} - [{domain}] 网络连接失败: {e}")
+            self._send_notification("签到失败 ❌", err_msg)
             self._save_checkin_record({
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "失败", "message": str(e), "points_gain": 0,
             })
 
         except Exception as e:
-            unknown = f"[{domain}] 未知异常: {e}"
-            logger.error(f"{self.plugin_name} - {unknown}")
-            self._send_notification("签到失败", unknown)
+            err_msg = "\n".join([
+                f"🌐 站点：{domain}",
+                f"📝 状态：❌ 签到失败",
+                f"⚠️ 错误：{e}",
+            ])
+            logger.error(f"{self.plugin_name} - [{domain}] 未知异常: {e}")
+            self._send_notification("签到失败 ❌", err_msg)
             self._save_checkin_record({
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "失败", "message": str(e), "points_gain": 0,
