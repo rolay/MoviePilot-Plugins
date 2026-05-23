@@ -79,7 +79,7 @@ class RailgunCheckin(_PluginBase):
     plugin_name = "GLaDOS 自动签到"
     plugin_desc = "定时随机延时签到 GLaDOS 系列站点，支持自定义域名、远程命令及机器人通知。"
     plugin_icon = "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png"
-    plugin_version = "2.0.0"
+    plugin_version = "2.1.0"
     plugin_author = "rolay"
     author_url = "https://github.com/rolay"
     plugin_config_prefix = "railguncheckin_"
@@ -491,12 +491,16 @@ class RailgunCheckin(_PluginBase):
                 points_gain = self._safe_int(checkin_list[0].get("points"), 0)
 
             # 3. 智能判断签到状态
+            # GLaDOS API: code=0 表示成功，code=-1 或其他表示失败
+            # 兜底：message 包含 "Got" 或 "Checkin" 也视为成功
             is_repeat = any(kw.lower() in message.lower() for kw in REPEAT_KEYWORDS)
+            is_success_by_code = (code == 0)
+            is_success_by_msg = ("Got" in message or "Checkin" in message)
 
-            if code == 1 and not is_repeat:
-                checkin_status = "签到成功"
-            elif is_repeat or code == 1:
+            if is_repeat:
                 checkin_status = "已签到"
+            elif is_success_by_code or (is_success_by_msg and not is_repeat):
+                checkin_status = "签到成功"
             else:
                 checkin_status = "签到失败"
 
@@ -516,38 +520,43 @@ class RailgunCheckin(_PluginBase):
             left_days = user_status.get("left_days")
             user_email = user_status.get("email")
 
-            # 5. 构造通知消息
+            # 5. 构造美化通知消息
             if checkin_status == "签到成功":
-                status_line = f"[{domain}] 签到成功!"
-                if points_gain > 0:
-                    status_line += f" (+{points_gain} 点)"
+                title_suffix = "签到成功 ✅"
             elif checkin_status == "已签到":
-                status_line = f"[{domain}] 今日已签到"
+                title_suffix = "今日已签到 ℹ️"
             else:
-                status_line = f"[{domain}] 签到失败 (code={code})"
+                title_suffix = "签到失败 ❌"
 
-            detail_parts = [status_line]
-            if message:
-                detail_parts.append(f"接口消息: {message}")
-            if current_points is not None:
-                detail_parts.append(f"当前积分: {current_points}")
+            # 积分行：本次获得 + 当前余额
+            if points_gain > 0:
+                points_line = f"+{points_gain} 点"
+                if current_points is not None:
+                    points_line += f"（余 {current_points} 点）"
+            elif current_points is not None:
+                points_line = f"{current_points} 点"
+            else:
+                points_line = "-"
+
+            # 剩余时间行
             if left_days is not None and left_days >= 0:
-                detail_parts.append(f"剩余天数: {left_days}")
-            if user_email:
-                detail_parts.append(f"邮箱: {user_email}")
-            detail_parts.append(f"伪装浏览器: {env['name']}")
-
-            full_msg = "\n".join(detail_parts)
-
-            if checkin_status == "签到失败":
-                logger.warning(f"{self.plugin_name} - {full_msg}")
-                self._send_notification("签到失败", full_msg)
-            elif checkin_status == "已签到":
-                logger.info(f"{self.plugin_name} - {full_msg}")
-                self._send_notification("今日已签到", full_msg)
+                days_line = f"{left_days} 天"
             else:
-                logger.info(f"{self.plugin_name} - {full_msg}")
-                self._send_notification("签到成功", full_msg)
+                days_line = "-"
+
+            detail_lines = [
+                f"站点：{domain}",
+                f"状态：{checkin_status}",
+                f"积分：{points_line}",
+                f"剩余时间：{days_line}",
+            ]
+            if user_email:
+                detail_lines.append(f"邮箱：{user_email}")
+
+            full_msg = "\n".join(detail_lines)
+
+            logger.info(f"{self.plugin_name} - [{domain}] {checkin_status} | 积分: {points_line} | 剩余: {days_line}")
+            self._send_notification(title_suffix, full_msg)
 
             # 6. 兜底保存签到记录（如果回查积分历史 API 未返回数据）
             self._save_checkin_record({
