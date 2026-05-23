@@ -79,7 +79,7 @@ class RailgunCheckin(_PluginBase):
     plugin_name = "GLaDOS 自动签到"
     plugin_desc = "定时随机延时签到 GLaDOS 系列站点，支持自定义域名、远程命令及机器人通知。"
     plugin_icon = "https://raw.githubusercontent.com/rolay/MoviePilot-Plugins/main/icons/railguncheckin.png"
-    plugin_version = "2.2.1"
+    plugin_version = "2.3.0"
     plugin_author = "rolay"
     author_url = "https://github.com/rolay"
     plugin_config_prefix = "railguncheckin_"
@@ -520,13 +520,14 @@ class RailgunCheckin(_PluginBase):
             left_days = user_status.get("left_days")
             user_email = user_status.get("email")
 
-            # 5. 构造树形风格通知消息
+            # 5. 构造通知消息
+            # "已签到"属于今日已完成签到，是成功状态，不是失败
             if checkin_status == "签到成功":
                 title_suffix = "签到成功 ✅"
                 status_icon = "✅ 签到成功"
             elif checkin_status == "已签到":
-                title_suffix = "今日已签到 🔄"
-                status_icon = "🔄 已签到"
+                title_suffix = "签到成功 ✅"   # 今日已完成，整体结果仍为成功
+                status_icon = "🔄 今日已签到"
             else:
                 title_suffix = "签到失败 ❌"
                 status_icon = "❌ 签到失败"
@@ -544,24 +545,16 @@ class RailgunCheckin(_PluginBase):
             # 剩余时间行
             days_line = f"{left_days} 天" if (left_days is not None and left_days >= 0) else "-"
 
-            # 邮箱脱敏（保留前2位和@后域名，中间替换*）
-            def _mask_email(e: str) -> str:
-                try:
-                    local, domain_part = e.split("@", 1)
-                    masked = local[:2] + "*" * max(4, len(local) - 2)
-                    return f"{masked}@{domain_part}"
-                except Exception:
-                    return e
-
-            # 组装纯列表格式（emoji + 标签，无树形符号）
+            # 组装通知内容（emoji + 标签）
             lines = [
                 f"🌐 站点：{domain}",
                 f"📝 状态：{status_icon}",
                 f"🥉 积分：{points_line}",
                 f"⏳ 剩余：{days_line}",
+                f"🖥️ 浏览器：{env['name']}",
             ]
             if user_email:
-                lines.append(f"📧 邮箱：{_mask_email(user_email)}")
+                lines.append(f"📧 邮箱：{user_email}")
 
             full_msg = "\n".join(lines)
 
